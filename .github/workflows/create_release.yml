@@ -52,12 +52,11 @@ jobs:
         if: steps.check_releases.outputs.result == 'create'
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: 'Build Executable,Build Dashboard Executable'
+          repo: ${{ github.repository }}
+          workflow: Build Executable,Build Dashboard Executable
           workflow_conclusion: success
           path: artifacts
-          name: .*-executable-.*
-          search_artifacts: true
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          if_no_artifact_found: fail
 
       - name: List downloaded artifacts
         if: steps.check_releases.outputs.result == 'create'
@@ -69,17 +68,26 @@ jobs:
         if: steps.check_releases.outputs.result == 'create'
         id: validate_artifacts
         run: |
-          # Check if we have both executables
+          # List all downloaded files for debugging
+          echo "Listing all downloaded files:"
+          find artifacts -type f | sort
+          
+          # Check if we have both executables (anywhere in the artifacts directory)
           MAIN_EXE_COUNT=$(find artifacts -name "wsmd.exe" | wc -l)
           DASHBOARD_EXE_COUNT=$(find artifacts -name "wsmd_dashboard.exe" | wc -l)
           
           echo "Found $MAIN_EXE_COUNT main executable(s) and $DASHBOARD_EXE_COUNT dashboard executable(s)"
           
-          if [ $MAIN_EXE_COUNT -eq 0 ] || [ $DASHBOARD_EXE_COUNT -eq 0 ]; then
-            echo "::error::Missing required executables. Main: $MAIN_EXE_COUNT, Dashboard: $DASHBOARD_EXE_COUNT"
+          if [ $MAIN_EXE_COUNT -eq 0 ]; then
+            echo "::error::Missing main executable (wsmd.exe)"
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          elif [ $DASHBOARD_EXE_COUNT -eq 0 ]; then
+            echo "::error::Missing dashboard executable (wsmd_dashboard.exe)"
             echo "proceed=false" >> $GITHUB_OUTPUT
             exit 1
           else
+            echo "Both executables found!"
             echo "proceed=true" >> $GITHUB_OUTPUT
           fi
 
@@ -92,7 +100,17 @@ jobs:
         if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         run: |
           # Find the executable files and copy them to the release directory
-          find artifacts -name "*.exe" -exec cp {} release-files/ \;
+          echo "Copying executables to release directory..."
+          
+          # Find all executables
+          MAIN_EXE_PATH=$(find artifacts -name "wsmd.exe" | head -n 1)
+          DASHBOARD_EXE_PATH=$(find artifacts -name "wsmd_dashboard.exe" | head -n 1)
+          
+          # Copy them with specific names (this ensures consistent naming)
+          cp "$MAIN_EXE_PATH" release-files/wsmd.exe
+          cp "$DASHBOARD_EXE_PATH" release-files/wsmd_dashboard.exe
+          
+          echo "Release files:"
           ls -la release-files/
 
       - name: Create release tag
