@@ -1,0 +1,4 @@
+# Requirements for Raspberry Pi Dashboard
+PyInstaller>=5.7.0
+tkinter
+python-dotenv
