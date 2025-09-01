@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device Manager - Dashboard</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>WSMD Manager</h1>
+      <div class="user-info">
+        <div class="connection-status">
+          <span>Status: </span>
+          <span id="connectionStatus" class="status disconnected">Connecting...</span>
+          <span id="lastUpdated"></span>
+        </div>
+        <div class="logged-in-as">Logged in as: <span id="currentUser" data-username="{{ username }}"
+            data-is-key-user="{{ 'true' if is_key_user else 'false' }}">{{ username }}</span>
+        </div>
+        <button id="logoutBtn">Logout</button>
+      </div>
+    </header>
+
+    <div class="dashboard">
+      <section class="forms-container">
+        <!-- Combined form for device properties -->
+        <div class="form-panel" id="devicePropertiesForm">
+          <h3>Update Device Properties</h3>
+          <form id="updateDeviceForm">
+            <div class="form-group">
+              <label for="deviceMac">Device:</label>
+              <select id="deviceMac" name="mac_address" required>
+                <option value="">Select Device</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="deviceName">Name:</label>
+              <input type="text" id="deviceName" name="name" placeholder="Device name (optional)">
+            </div>
+            <div class="form-group">
+              <label for="deviceOrder">Order:</label>
+              <input type="number" id="deviceOrder" name="order" min="1" required>
+            </div>
+            <div class="form-group">
+              <label for="deviceMaxHits">Max Hits:</label>
+              <input type="number" id="deviceMaxHits" name="max_hits" min="1" required>
+            </div>
+            <div class="form-group">
+              <button type="submit">Update Device</button>
+            </div>
+            <div id="deviceMessage" class="message"></div>
+          </form>
+        </div>
+
+        <!-- These forms will only be shown to key users -->
+        <div class="form-panel key-user-only" id="createUserForm">
+          <h3>Create User</h3>
+          <form id="newUserForm">
+            <div class="form-group">
+              <label for="newUsername">Username:</label>
+              <input type="text" id="newUsername" name="username" required>
+            </div>
+            <div class="form-group">
+              <label for="newPassword">Password:</label>
+              <input type="password" id="newPassword" name="password" required>
+            </div>
+            <div class="form-group">
+              <button type="submit">Create User</button>
+            </div>
+            <div id="createUserMessage" class="message"></div>
+          </form>
+        </div>
+
+        <div class="form-panel key-user-only" id="updatePasswordForm">
+          <h3>Update User Password</h3>
+          <form id="passwordForm">
+            <div class="form-group">
+              <label for="passwordUsername">Username:</label>
+              <select id="passwordUsername" name="username" required>
+                <option value="">Select User</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="userPassword">New Password:</label>
+              <input type="password" id="userPassword" name="password" required>
+            </div>
+            <div class="form-group">
+              <button type="submit">Update Password</button>
+            </div>
+            <div id="passwordMessage" class="message"></div>
+          </form>
+        </div>
+      </section>
+      <section class="device-list">
+        <h2>Devices</h2>
+        <div class="table-container">
+          <table id="deviceTable">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Order</th>
+                <th>Hit Counter</th>
+                <th>Max Hits</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deviceTableBody">
+              <!-- Device data will be populated here -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="/static/js/dashboard.js"></script>
+</body>
+
+</html>
