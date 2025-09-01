@@ -98,18 +98,106 @@ def setup_ap_mode(ssid="PiDeviceManager"):
     password_file = temp_dir / "ap_password.txt"
     password_file.write_text(password)
     
-    # In production on Raspberry Pi, we would:
-    # 1. Configure hostapd with the SSID and password
-    # This is simplified - in reality you would modify config files
-    # and restart services
-    
-    print(f"""
+    # Production configuration for Raspberry Pi
+    if is_raspberry_pi():
+        try:
+            # Install required packages if not already installed
+            subprocess.run(['apt-get', 'update'], check=True)
+            subprocess.run(['apt-get', 'install', '-y', 'hostapd', 'dnsmasq'], check=True)
+            
+            # Stop services if running
+            subprocess.run(['systemctl', 'stop', 'hostapd'], check=False)
+            subprocess.run(['systemctl', 'stop', 'dnsmasq'], check=False)
+            
+            # Configure static IP for wlan0
+            with open('/etc/dhcpcd.conf', 'a') as f:
+                f.write('\n# WSMD AP Mode Configuration\n')
+                f.write('interface wlan0\n')
+                f.write('    static ip_address=192.168.4.1/24\n')
+                f.write('    nohook wpa_supplicant\n')
+            
+            # Configure hostapd
+            hostapd_conf = """
+# WSMD hostapd configuration
+interface=wlan0
+driver=nl80211
+ssid={}
+hw_mode=g
+channel=7
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase={}
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+""".format(ssid, password)
+            
+            with open('/etc/hostapd/hostapd.conf', 'w') as f:
+                f.write(hostapd_conf)
+            
+            # Configure hostapd to use this config file
+            with open('/etc/default/hostapd', 'w') as f:
+                f.write('DAEMON_CONF="/etc/hostapd/hostapd.conf"\n')
+            
+            # Configure dnsmasq for DHCP server
+            dnsmasq_conf = """
+# WSMD dnsmasq configuration
+interface=wlan0
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+domain=wlan
+address=/wsmd.local/192.168.4.1
+"""
+            with open('/etc/dnsmasq.conf', 'w') as f:
+                f.write(dnsmasq_conf)
+            
+            # Enable IP forwarding
+            with open('/etc/sysctl.conf', 'a') as f:
+                f.write('\n# WSMD IP forwarding\n')
+                f.write('net.ipv4.ip_forward=1\n')
+            
+            # Apply sysctl changes
+            subprocess.run(['sysctl', '-p'], check=True)
+            
+            # Restart networking
+            subprocess.run(['systemctl', 'restart', 'dhcpcd'], check=True)
+            
+            # Enable and start services
+            subprocess.run(['systemctl', 'unmask', 'hostapd'], check=True)
+            subprocess.run(['systemctl', 'enable', 'hostapd'], check=True)
+            subprocess.run(['systemctl', 'enable', 'dnsmasq'], check=True)
+            subprocess.run(['systemctl', 'start', 'hostapd'], check=True)
+            subprocess.run(['systemctl', 'start', 'dnsmasq'], check=True)
+            
+            print(f"""
 =================================
 ACCESS POINT MODE ACTIVATED
 SSID: {ssid}
 Password: {password}
+IP Address: 192.168.4.1
 =================================
-    """)
+            """)
+        except Exception as e:
+            print(f"Error configuring AP mode: {e}")
+            # Fall back to simulated mode if configuration fails
+            print(f"""
+=================================
+SIMULATED ACCESS POINT MODE
+SSID: {ssid}
+Password: {password}
+=================================
+            """)
+    else:
+        # Simulation mode for non-Raspberry Pi systems
+        print(f"""
+=================================
+SIMULATED ACCESS POINT MODE
+SSID: {ssid}
+Password: {password}
+=================================
+        """)
     
     return password
 

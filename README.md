@@ -90,7 +90,7 @@ source venv/bin/activate
 
 # Run the server
 cd wsmd
-python -m app.main
+ENV=development python -m app.main
 ```
 
 On first run, you'll be prompted to create a key user account.
@@ -129,7 +129,7 @@ source venv/bin/activate
 
 # Run the dashboard
 cd wsmd
-python -m dashboard.tkinter_dashboard
+python -m dashboard.main
 ```
 
 Press `Esc` to exit the dashboard.
