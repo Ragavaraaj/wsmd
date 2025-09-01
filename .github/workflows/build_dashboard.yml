@@ -26,12 +26,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Debug directory structure
-        run: |
-          echo "Listing repository structure for debugging:"
-          dir /s /b
-          echo "-------------------"
-
       - name: Build dashboard executable with PyInstaller
         run: |
           echo "Trying direct command line approach instead of spec file"
@@ -45,20 +39,3 @@ jobs:
           name: wsmd-dashboard-executable-${{ github.sha }}
           path: dist/wsmd_dashboard.exe
           retention-days: 30 # Artifact will be available for 30 days
-          
-      - name: Create Release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const workflow_run_id = context.runId;
-            console.log(`Triggering release workflow from run ID: ${workflow_run_id}`);
-            
-            // Trigger the create_release workflow
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'create_release.yml',
-              ref: 'main'
-            });
