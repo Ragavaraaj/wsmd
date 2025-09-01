@@ -7,6 +7,14 @@ from pathlib import Path
 
 # Define paths - use relative paths to work in any environment
 base_dir = os.path.dirname(SPECPATH)
+print(f"Initial base directory: {base_dir}")
+
+# In GitHub Actions, the repository is checked out to a subfolder with its name
+if os.path.exists(os.path.join(base_dir, 'wsmd')):
+    # For GitHub Actions environment
+    base_dir = os.path.join(base_dir, 'wsmd')
+    print(f"Updated base directory for GitHub Actions: {base_dir}")
+
 app_dir = os.path.join(base_dir, 'app')
 
 # Debug info to help troubleshoot
@@ -45,7 +53,7 @@ else:
 
 a = Analysis(
     ['app/main.py'],
-    pathex=[root_dir],
+    pathex=[base_dir],
     binaries=[],
     datas=datas,
     hiddenimports=[

@@ -1,0 +1,103 @@
+name: Create Release
+
+on:
+  workflow_run:
+    workflows: ["Build Executable", "Build Dashboard Executable"]
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  create-release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for recent releases
+        id: check_releases
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Check if a release was created in the last 5 minutes
+            const date = new Date();
+            date.setMinutes(date.getMinutes() - 5);
+            const since = date.toISOString();
+            
+            console.log(`Checking for releases created since ${since}`);
+            
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 10
+            });
+            
+            if (releases.data.length > 0) {
+              const recentRelease = releases.data[0];
+              console.log(`Most recent release: ${recentRelease.tag_name} created at ${recentRelease.created_at}`);
+              
+              const releaseDate = new Date(recentRelease.created_at);
+              if (releaseDate > date) {
+                console.log(`Found recent release: ${recentRelease.tag_name}`);
+                return 'skip';
+              }
+            }
+            
+            return 'create';
+          result-encoding: string
+
+      - name: Download artifacts from previous workflows
+        if: steps.check_releases.outputs.result == 'create'
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id || 'Build Executable,Build Dashboard Executable' }}
+          workflow_conclusion: success
+          path: artifacts
+
+      - name: List downloaded artifacts
+        if: steps.check_releases.outputs.result == 'create'
+        run: |
+          ls -la artifacts
+          find artifacts -type f | sort
+
+      - name: Create release directory
+        if: steps.check_releases.outputs.result == 'create'
+        run: |
+          mkdir -p release-files
+
+      - name: Copy artifacts to release directory
+        if: steps.check_releases.outputs.result == 'create'
+        run: |
+          # Find the executable files and copy them to the release directory
+          find artifacts -name "*.exe" -exec cp {} release-files/ \;
+          ls -la release-files/
+
+      - name: Create release tag
+        if: steps.check_releases.outputs.result == 'create'
+        id: create_tag
+        run: |
+          # Generate a tag based on the date and time
+          TAG="v$(date +'%Y.%m.%d-%H%M%S')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.check_releases.outputs.result == 'create'
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.create_tag.outputs.tag }}
+          name: WSMD Release ${{ steps.create_tag.outputs.tag }}
+          body: |
+            Automated release of WSMD executables
+
+            This release contains:
+            - WSMD Server application
+            - WSMD Dashboard application
+
+            Built from commit: ${{ github.sha }}
+          files: release-files/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
