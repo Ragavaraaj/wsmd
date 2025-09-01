@@ -2,19 +2,46 @@
 PyInstaller spec file for the WSMD application
 """
 import os
+import sys
 from pathlib import Path
 
-# Define paths
-root_dir = os.path.abspath(os.path.dirname(SPECPATH))
-app_dir = os.path.join(root_dir, 'app')
+# Define paths - use relative paths to work in any environment
+base_dir = os.path.dirname(SPECPATH)
+app_dir = os.path.join(base_dir, 'app')
 
-# Define data files to include
-datas = [
-    # Include static files
-    (os.path.join(app_dir, 'static'), 'app/static'),
-    # Include template files
-    (os.path.join(app_dir, 'templates'), 'app/templates'),
-]
+# Debug info to help troubleshoot
+print(f"Base directory: {base_dir}")
+print(f"App directory: {app_dir}")
+print(f"Static directory exists: {os.path.exists(os.path.join(app_dir, 'static'))}")
+print(f"Templates directory exists: {os.path.exists(os.path.join(app_dir, 'templates'))}")
+
+# Define data files to include - with path validation
+static_path = os.path.join(app_dir, 'static')
+templates_path = os.path.join(app_dir, 'templates')
+
+datas = []
+# Add paths only if they exist
+if os.path.exists(static_path):
+    datas.append((static_path, 'app/static'))
+else:
+    print(f"WARNING: Static directory not found at {static_path}")
+    
+if os.path.exists(templates_path):
+    datas.append((templates_path, 'app/templates'))
+else:
+    print(f"WARNING: Templates directory not found at {templates_path}")
+
+# List directory contents to aid debugging
+print("Contents of base directory:")
+for item in os.listdir(base_dir):
+    print(f"  {item}")
+
+if os.path.exists(app_dir):
+    print("Contents of app directory:")
+    for item in os.listdir(app_dir):
+        print(f"  {item}")
+else:
+    print(f"App directory not found: {app_dir}")
 
 a = Analysis(
     ['app/main.py'],

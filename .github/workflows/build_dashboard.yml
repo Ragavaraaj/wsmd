@@ -26,9 +26,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
+      - name: Debug directory structure
+        run: |
+          echo "Listing repository structure for debugging:"
+          dir /s /b
+          echo "-------------------"
+
       - name: Build dashboard executable with PyInstaller
         run: |
-          pyinstaller wsmd_dashboard.spec
+          echo "Trying direct command line approach instead of spec file"
+          cd ${{ github.workspace }}
+          dir dashboard
+          pyinstaller --onefile --clean --windowed --name wsmd_dashboard dashboard/main.py
 
       - name: Upload dashboard executable as artifact
         uses: actions/upload-artifact@v4
