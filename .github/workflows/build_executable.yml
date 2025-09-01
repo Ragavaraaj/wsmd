@@ -1,0 +1,39 @@
+name: Build Executable
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+jobs:
+  build:
+    runs-on: windows-latest  # Using Windows runner to build Windows executable
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller wsmd.spec
+        
+    - name: Upload executable as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: wsmd-executable-${{ github.sha }}
+        path: dist/wsmd.exe
+        retention-days: 30  # Artifact will be available for 30 days
