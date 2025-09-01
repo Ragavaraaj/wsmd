@@ -11,7 +11,7 @@ jobs:
   build-main-executable:
     name: Build Main Executable
     runs-on: windows-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
   build-dashboard-executable:
     name: Build Dashboard Executable
     runs-on: windows-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,48 +70,58 @@ jobs:
           name: wsmd-dashboard-executable
           path: dist/wsmd_dashboard.exe
           retention-days: 30 # Artifact will be available for 30 days
-          
+
   build-raspberry-pi-executable:
     name: Build Raspberry Pi Executable
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: arm
-          
+          platforms: linux/arm/v7
+
       - name: Build Raspberry Pi executable
-        uses: addnab/docker-run-action@v3
-        with:
-          image: arm32v7/python:3.10-slim
-          options: -v ${{ github.workspace }}:/workspace
-          run: |
-            cd /workspace
-            apt-get update
-            apt-get install -y build-essential python3-dev
-            pip3 install --upgrade pip
-            pip3 install -r requirements.txt
-            pip3 install pyinstaller
-            
-            # Modify the spec file for Raspberry Pi
-            sed -i 's/console=True/console=True, target_arch="armhf"/' wsmd.spec
-            
-            # Build the executable
-            pyinstaller wsmd.spec
-            
-            # Rename the executable for clarity
-            mv dist/wsmd dist/wsmd-arm
-            
-            # List the files
-            ls -la dist/
-            
-            # Test the binary architecture
-            file dist/wsmd-arm
-      
+        run: |
+          # Create a Dockerfile for the build
+          cat > Dockerfile.arm << EOF
+          FROM --platform=linux/arm/v7 python:3.10-slim
+
+          WORKDIR /app
+          COPY . /app
+
+          RUN apt-get update && \
+              apt-get install -y build-essential python3-dev file && \
+              pip3 install --upgrade pip && \
+              pip3 install -r requirements.txt && \
+              pip3 install pyinstaller
+
+          RUN sed -i 's/console=True/console=True, target_arch="armhf"/' wsmd.spec && \
+              pyinstaller wsmd.spec && \
+              mv dist/wsmd dist/wsmd-arm && \
+              ls -la dist/ && \
+              file dist/wsmd-arm
+          EOF
+
+          # Build the Docker image with the ARM platform
+          docker buildx build --platform linux/arm/v7 -t wsmd-arm-builder -f Dockerfile.arm . --load || true
+
+          # Create the output directory
+          mkdir -p dist
+
+          # Run the container to copy the executable
+          docker run --platform linux/arm/v7 --rm -v $(pwd)/dist:/output wsmd-arm-builder \
+            /bin/bash -c "cp -v /app/dist/wsmd-arm /output/ || ls -la /app/dist/"
+
+          # List the output
+          ls -la dist/
+
       - name: Upload Raspberry Pi executable as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -122,39 +132,51 @@ jobs:
   build-raspberry-pi-dashboard:
     name: Build Raspberry Pi Dashboard
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: arm
-          
+          platforms: linux/arm/v7
+
       - name: Build Raspberry Pi dashboard executable
-        uses: addnab/docker-run-action@v3
-        with:
-          image: arm32v7/python:3.10-slim
-          options: -v ${{ github.workspace }}:/workspace
-          run: |
-            cd /workspace
-            apt-get update
-            # Install X11 and Tk development files for Tkinter support
-            apt-get install -y build-essential python3-dev python3-tk
-            pip3 install --upgrade pip
-            pip3 install pyinstaller
-            
-            # Build the executable directly
-            cd /workspace
-            pyinstaller --onefile --name wsmd_dashboard-arm dashboard/main.py
-            
-            # List the files
-            ls -la dist/
-            
-            # Test the binary architecture
-            file dist/wsmd_dashboard-arm
-      
+        run: |
+          # Create a Dockerfile for the build
+          cat > Dockerfile.arm.dashboard << EOF
+          FROM --platform=linux/arm/v7 python:3.10-slim
+
+          WORKDIR /app
+          COPY . /app
+
+          RUN apt-get update && \
+              apt-get install -y build-essential python3-dev python3-tk file && \
+              pip3 install --upgrade pip && \
+              pip3 install pyinstaller
+
+          RUN pyinstaller --onefile --name wsmd_dashboard-arm dashboard/main.py && \
+              ls -la dist/ && \
+              file dist/wsmd_dashboard-arm
+          EOF
+
+          # Build the Docker image with the ARM platform
+          docker buildx build --platform linux/arm/v7 -t wsmd-dashboard-arm-builder -f Dockerfile.arm.dashboard . --load || true
+
+          # Create the output directory
+          mkdir -p dist
+
+          # Run the container to copy the executable
+          docker run --platform linux/arm/v7 --rm -v $(pwd)/dist:/output wsmd-dashboard-arm-builder \
+            /bin/bash -c "cp -v /app/dist/wsmd_dashboard-arm /output/ || ls -la /app/dist/"
+
+          # List the output
+          ls -la dist/
+
       - name: Upload Raspberry Pi dashboard executable as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -164,10 +186,16 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [build-main-executable, build-dashboard-executable, build-raspberry-pi-executable, build-raspberry-pi-dashboard]
+    needs:
+      [
+        build-main-executable,
+        build-dashboard-executable,
+        build-raspberry-pi-executable,
+        build-raspberry-pi-dashboard,
+      ]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Check for recent releases
         id: check_releases
@@ -215,14 +243,14 @@ jobs:
         with:
           name: wsmd-dashboard-executable
           path: artifacts/dashboard
-          
+
       - name: Download Raspberry Pi executable artifact
         if: steps.check_releases.outputs.result == 'create'
         uses: actions/download-artifact@v4
         with:
           name: wsmd-raspberry-pi-executable
           path: artifacts/raspberry-pi
-          
+
       - name: Download Raspberry Pi dashboard executable artifact
         if: steps.check_releases.outputs.result == 'create'
         uses: actions/download-artifact@v4
@@ -275,11 +303,11 @@ jobs:
           cp artifacts/dashboard/wsmd_dashboard.exe release-files/
           cp artifacts/raspberry-pi/wsmd-arm release-files/
           cp artifacts/raspberry-pi-dashboard/wsmd_dashboard-arm release-files/
-          
+
           # Ensure the Linux executables are executable
           chmod +x release-files/wsmd-arm
           chmod +x release-files/wsmd_dashboard-arm
-          
+
           echo "Release files:"
           ls -la release-files/
 
@@ -306,31 +334,31 @@ jobs:
             - WSMD Dashboard application for Windows (wsmd_dashboard.exe)
             - WSMD Server application for Raspberry Pi (wsmd-arm)
             - WSMD Dashboard application for Raspberry Pi (wsmd_dashboard-arm)
-            
+
             ## Windows Executables
             Both Windows executables are standalone and do not require installation.
-            
+
             ### Server Application (Windows)
             The WSMD Server provides a web interface for device management.
             Run wsmd.exe to start the server on port 8000.
-            
+
             ### Dashboard Application (Windows)
             The WSMD Dashboard provides a dedicated display of device status.
             Run wsmd_dashboard.exe to launch the dashboard.
-            
+
             ## Raspberry Pi Executables
             ### Server Application (Raspberry Pi)
             To run on Raspberry Pi Zero:
             1. Download the wsmd-arm file
             2. Make it executable: `chmod +x wsmd-arm`
             3. Run it: `./wsmd-arm`
-            
+
             ### Dashboard Application (Raspberry Pi)
             To run on Raspberry Pi Zero:
             1. Download the wsmd_dashboard-arm file
             2. Make it executable: `chmod +x wsmd_dashboard-arm`
             3. Run it: `./wsmd_dashboard-arm`
-            
+
             ---
             Built from commit: ${{ github.sha }}
             Release date: $(date +'%Y-%m-%d %H:%M:%S UTC')

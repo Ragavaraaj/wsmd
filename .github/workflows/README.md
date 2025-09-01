@@ -21,11 +21,18 @@ This combined workflow handles the entire process of building and releasing WSMD
   - Uploads the executable as an artifact
 
 - **Job 3: Build Raspberry Pi Executable**
+
   - Creates an executable for the WSMD server application that runs on Raspberry Pi Zero
   - Uses ARM-compatible build environment
   - Uploads the executable as an artifact
 
-- **Job 4: Create GitHub Release**
+- **Job 4: Build Raspberry Pi Dashboard**
+
+  - Creates an executable for the WSMD dashboard application that runs on Raspberry Pi Zero
+  - Uses ARM-compatible build environment with Tkinter support
+  - Uploads the executable as an artifact
+
+- **Job 5: Create GitHub Release**
   - Automatically runs after both build jobs complete successfully
   - Only runs on the main branch, not on pull requests
   - Creates a GitHub release containing both executables
@@ -53,31 +60,41 @@ The workflow runs on each push to the main branch, on pull requests, or can be t
 
 1. Navigate to the "Releases" section of your GitHub repository
 2. Download the assets from the latest release
-3. Each release contains three executables:
+3. Each release contains four executables:
    - `wsmd.exe` (Windows server application)
    - `wsmd_dashboard.exe` (Windows dashboard application)
    - `wsmd-arm` (Raspberry Pi server application)
+   - `wsmd_dashboard-arm` (Raspberry Pi dashboard application)
 
 ### Using the Executables
 
 1. Extract the downloaded ZIP file
 
 2. For the Windows main WSMD application:
+
    - Run `wsmd.exe` to start the server
    - The server will run on port 8000 by default
    - Access the web interface at http://localhost:8000
 
 3. For the Windows Dashboard application:
+
    - Make sure the database file (`wsmd.db`) is in the same directory as the executable or in the parent directory
    - Run `wsmd_dashboard.exe` to start the dashboard
    - The dashboard will automatically update with device data from the database
-   
+
 4. For the Raspberry Pi WSMD application:
+
    - Transfer `wsmd-arm` to your Raspberry Pi Zero
    - Make it executable: `chmod +x wsmd-arm`
    - Run it: `./wsmd-arm`
    - The server will run on port 8000 by default
    - Access the web interface at http://[raspberry-pi-ip]:8000
+
+5. For the Raspberry Pi Dashboard application:
+   - Transfer `wsmd_dashboard-arm` to your Raspberry Pi Zero
+   - Make it executable: `chmod +x wsmd_dashboard-arm`
+   - Run it: `./wsmd_dashboard-arm`
+   - The dashboard will display device data from the local database
 
 ## Notes
 
