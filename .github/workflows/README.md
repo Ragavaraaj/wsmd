@@ -7,6 +7,7 @@ This directory contains GitHub Actions workflow configurations for building stan
 ### 1. Build Executable (`build_executable.yml`)
 
 This workflow builds the main WSMD server application with the following features:
+
 - Creates a single-file executable for Windows
 - Includes all static files and templates
 - Runs on each push to the main branch, on pull requests, or can be triggered manually
@@ -16,6 +17,7 @@ The executable will be available as an artifact named `wsmd-executable-[commit-s
 ### 2. Build Dashboard (`build_dashboard.yml`)
 
 This workflow builds the WSMD Dashboard application with the following features:
+
 - Creates a single-file executable for Windows
 - Builds as a windowed application (no console)
 - Runs on each push to the main branch, on pull requests, or can be triggered manually
@@ -42,6 +44,7 @@ The executable will be available as an artifact named `wsmd-dashboard-executable
 
 1. Extract the downloaded ZIP file
 2. For the main WSMD application:
+
    - Run `wsmd.exe` to start the server
    - The server will run on port 8000 by default
    - Access the web interface at http://localhost:8000
