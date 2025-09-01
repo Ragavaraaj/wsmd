@@ -10,7 +10,8 @@ on:
 
 jobs:
   create-release:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # Only run if the triggering workflow succeeded and it's not a PR
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -51,9 +52,12 @@ jobs:
         if: steps.check_releases.outputs.result == 'create'
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: ${{ github.event.workflow_run.workflow_id || 'Build Executable,Build Dashboard Executable' }}
+          workflow: 'Build Executable,Build Dashboard Executable'
           workflow_conclusion: success
           path: artifacts
+          name: .*-executable-.*
+          search_artifacts: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: List downloaded artifacts
         if: steps.check_releases.outputs.result == 'create'
@@ -61,20 +65,38 @@ jobs:
           ls -la artifacts
           find artifacts -type f | sort
 
-      - name: Create release directory
+      - name: Validate downloaded artifacts
         if: steps.check_releases.outputs.result == 'create'
+        id: validate_artifacts
+        run: |
+          # Check if we have both executables
+          MAIN_EXE_COUNT=$(find artifacts -name "wsmd.exe" | wc -l)
+          DASHBOARD_EXE_COUNT=$(find artifacts -name "wsmd_dashboard.exe" | wc -l)
+          
+          echo "Found $MAIN_EXE_COUNT main executable(s) and $DASHBOARD_EXE_COUNT dashboard executable(s)"
+          
+          if [ $MAIN_EXE_COUNT -eq 0 ] || [ $DASHBOARD_EXE_COUNT -eq 0 ]; then
+            echo "::error::Missing required executables. Main: $MAIN_EXE_COUNT, Dashboard: $DASHBOARD_EXE_COUNT"
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release directory
+        if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         run: |
           mkdir -p release-files
 
       - name: Copy artifacts to release directory
-        if: steps.check_releases.outputs.result == 'create'
+        if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         run: |
           # Find the executable files and copy them to the release directory
           find artifacts -name "*.exe" -exec cp {} release-files/ \;
           ls -la release-files/
 
       - name: Create release tag
-        if: steps.check_releases.outputs.result == 'create'
+        if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         id: create_tag
         run: |
           # Generate a tag based on the date and time
@@ -82,7 +104,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: steps.check_releases.outputs.result == 'create'
+        if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
@@ -92,10 +114,22 @@ jobs:
             Automated release of WSMD executables
 
             This release contains:
-            - WSMD Server application
-            - WSMD Dashboard application
-
+            - WSMD Server application (wsmd.exe)
+            - WSMD Dashboard application (wsmd_dashboard.exe)
+            
+            Both executables are standalone and do not require installation.
+            
+            ## Server Application
+            The WSMD Server provides a web interface for device management.
+            Run wsmd.exe to start the server on port 8000.
+            
+            ## Dashboard Application
+            The WSMD Dashboard provides a dedicated display of device status.
+            Run wsmd_dashboard.exe to launch the dashboard.
+            
+            ---
             Built from commit: ${{ github.sha }}
+            Release date: $(date +'%Y-%m-%d %H:%M:%S UTC')
           files: release-files/*
           draft: false
           prerelease: false
