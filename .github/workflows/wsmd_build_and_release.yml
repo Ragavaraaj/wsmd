@@ -78,56 +78,45 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v3
         with:
-          platforms: linux/arm/v7
-
+          python-version: "3.10"
+          
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static gcc-arm-linux-gnueabihf
+          
+      - name: Install PyInstaller and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # Use the Raspberry Pi specific requirements without bcrypt
+          pip install -r requirements-raspberry-pi.txt
+          
       - name: Build Raspberry Pi executable
         run: |
-          # Create a Dockerfile for the build
-          cat > Dockerfile.arm << EOF
-          FROM --platform=linux/arm/v7 python:3.10-slim
-
-          WORKDIR /app
-          COPY . /app
-
-          RUN apt-get update && \
-              apt-get install -y build-essential python3-dev file && \
-              pip3 install --upgrade pip && \
-              pip3 install -r requirements.txt && \
-              pip3 install pyinstaller
-
-          RUN sed -i 's/console=True/console=True, target_arch="armhf"/' wsmd.spec && \
-              pyinstaller wsmd.spec && \
-              mv dist/wsmd dist/wsmd-arm && \
-              ls -la dist/ && \
-              file dist/wsmd-arm
-          EOF
-
-          # Build the Docker image with the ARM platform
-          docker buildx build --platform linux/arm/v7 -t wsmd-arm-builder -f Dockerfile.arm . --load || true
-
-          # Create the output directory
-          mkdir -p dist
-
-          # Run the container to copy the executable
-          docker run --platform linux/arm/v7 --rm -v $(pwd)/dist:/output wsmd-arm-builder \
-            /bin/bash -c "cp -v /app/dist/wsmd-arm /output/ || ls -la /app/dist/"
-
-          # List the output
-          ls -la dist/
+          # Directly build with PyInstaller using ARM as target architecture
+          sed -i 's/console=True/console=True, target_arch="armhf"/' wsmd.spec
+          
+          # Build the executable
+          python -m PyInstaller wsmd.spec --distpath=./dist-arm
+          
+          # Rename for clarity
+          mv ./dist-arm/wsmd ./dist-arm/wsmd-arm
+          
+          # Check the output
+          ls -la ./dist-arm/
+          file ./dist-arm/wsmd-arm
 
       - name: Upload Raspberry Pi executable as artifact
         uses: actions/upload-artifact@v4
         with:
           name: wsmd-raspberry-pi-executable
-          path: dist/wsmd-arm
-          retention-days: 30 # Artifact will be available for 30 days
+          path: ./dist-arm/wsmd-arm
+          retention-days: 30
 
   build-raspberry-pi-dashboard:
     name: Build Raspberry Pi Dashboard
@@ -136,53 +125,38 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v3
         with:
-          platforms: linux/arm/v7
-
+          python-version: "3.10"
+          
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static gcc-arm-linux-gnueabihf python3-tk
+          
+      - name: Install PyInstaller and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # The dashboard doesn't need most of the server dependencies
+          
       - name: Build Raspberry Pi dashboard executable
         run: |
-          # Create a Dockerfile for the build
-          cat > Dockerfile.arm.dashboard << EOF
-          FROM --platform=linux/arm/v7 python:3.10-slim
-
-          WORKDIR /app
-          COPY . /app
-
-          RUN apt-get update && \
-              apt-get install -y build-essential python3-dev python3-tk file && \
-              pip3 install --upgrade pip && \
-              pip3 install pyinstaller
-
-          RUN pyinstaller --onefile --name wsmd_dashboard-arm dashboard/main.py && \
-              ls -la dist/ && \
-              file dist/wsmd_dashboard-arm
-          EOF
-
-          # Build the Docker image with the ARM platform
-          docker buildx build --platform linux/arm/v7 -t wsmd-dashboard-arm-builder -f Dockerfile.arm.dashboard . --load || true
-
-          # Create the output directory
-          mkdir -p dist
-
-          # Run the container to copy the executable
-          docker run --platform linux/arm/v7 --rm -v $(pwd)/dist:/output wsmd-dashboard-arm-builder \
-            /bin/bash -c "cp -v /app/dist/wsmd_dashboard-arm /output/ || ls -la /app/dist/"
-
-          # List the output
-          ls -la dist/
+          # Build the dashboard executable directly
+          python -m PyInstaller --onefile --name wsmd_dashboard-arm dashboard/main.py --distpath=./dist-arm-dashboard
+          
+          # Check the output
+          ls -la ./dist-arm-dashboard/
+          file ./dist-arm-dashboard/wsmd_dashboard-arm
 
       - name: Upload Raspberry Pi dashboard executable as artifact
         uses: actions/upload-artifact@v4
         with:
           name: wsmd-raspberry-pi-dashboard-executable
-          path: dist/wsmd_dashboard-arm
-          retention-days: 30 # Artifact will be available for 30 days
+          path: ./dist-arm-dashboard/wsmd_dashboard-arm
+          retention-days: 30
 
   create-release:
     name: Create GitHub Release
@@ -289,6 +263,13 @@ jobs:
             echo "All executables found!"
             echo "proceed=true" >> $GITHUB_OUTPUT
           fi
+          
+          # Check executable formats to make sure they're valid
+          echo "Checking executable formats:"
+          file artifacts/main/wsmd.exe || true
+          file artifacts/dashboard/wsmd_dashboard.exe || true
+          file artifacts/raspberry-pi/wsmd-arm || true
+          file artifacts/raspberry-pi-dashboard/wsmd_dashboard-arm || true
 
       - name: Create release directory
         if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
