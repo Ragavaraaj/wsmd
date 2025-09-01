@@ -4,33 +4,37 @@ This directory contains GitHub Actions workflow configurations for building stan
 
 ## Available Workflows
 
-### 1. Build Executable (`build_executable.yml`)
+### WSMD Build and Release (`wsmd_build_and_release.yml`)
 
-This workflow builds the main WSMD server application with the following features:
+This combined workflow handles the entire process of building and releasing WSMD executables with the following features:
 
-- Creates a single-file executable for Windows
-- Includes all static files and templates
-- Runs on each push to the main branch, on pull requests, or can be triggered manually
+- **Job 1: Build Main Executable**
 
-The executable will be available as an artifact named `wsmd-executable-[commit-sha]` and can be downloaded from the GitHub Actions page.
+  - Creates a single-file executable for the WSMD server application
+  - Includes all static files and templates
+  - Uploads the executable as an artifact
 
-### 2. Build Dashboard (`build_dashboard.yml`)
+- **Job 2: Build Dashboard Executable**
 
-This workflow builds the WSMD Dashboard application with the following features:
+  - Creates a single-file executable for the WSMD Dashboard application
+  - Builds as a windowed application (no console)
+  - Uploads the executable as an artifact
 
-- Creates a single-file executable for Windows
-- Builds as a windowed application (no console)
-- Runs on each push to the main branch, on pull requests, or can be triggered manually
+- **Job 3: Create GitHub Release**
+  - Automatically runs after both build jobs complete successfully
+  - Only runs on the main branch, not on pull requests
+  - Creates a GitHub release containing both executables
+  - Adds detailed release notes
 
-The executable will be available as an artifact named `wsmd-dashboard-executable-[commit-sha]` and can be downloaded from the GitHub Actions page.
+The workflow runs on each push to the main branch, on pull requests, or can be triggered manually.
 
 ## How to Use
 
-### Running the Workflows
+### Running the Workflow
 
-1. Push to the main branch or create a pull request to trigger builds automatically
+1. Push to the main branch or create a pull request to trigger the workflow automatically
 2. Alternatively, navigate to the "Actions" tab in your GitHub repository
-3. Select the workflow you want to run
+3. Select the "WSMD Build and Release" workflow
 4. Click "Run workflow" and select the branch to build from
 
 ### Downloading Artifacts
@@ -38,7 +42,15 @@ The executable will be available as an artifact named `wsmd-dashboard-executable
 1. Navigate to the "Actions" tab in your GitHub repository
 2. Select the completed workflow run
 3. Scroll down to the "Artifacts" section
-4. Click on the artifact you want to download (either `wsmd-executable-[commit-sha]` or `wsmd-dashboard-executable-[commit-sha]`)
+4. Click on the artifact you want to download (`wsmd-executable` or `wsmd-dashboard-executable`)
+
+### Accessing Releases
+
+1. Navigate to the "Releases" section of your GitHub repository
+2. Download the assets from the latest release
+3. Each release contains both executables:
+   - `wsmd.exe` (server application)
+   - `wsmd_dashboard.exe` (dashboard application)
 
 ### Using the Executables
 
@@ -56,5 +68,8 @@ The executable will be available as an artifact named `wsmd-dashboard-executable
 
 ## Notes
 
-- Artifacts are available for 30 days after the workflow run
-- Each build is tagged with the commit SHA for easy identification
+- Build artifacts are available for 30 days after the workflow run
+- GitHub releases are permanent and provide a more stable way to distribute executables
+- Each release includes a timestamp-based version number (e.g., v2025.09.02-123456)
+- Releases are only created for pushes to the main branch, not for pull requests
+- The workflow automatically prevents creating duplicate releases within a short time period

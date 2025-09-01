@@ -1,19 +1,82 @@
-name: Create Release
+name: WSMD Build and Release
 
 on:
-  workflow_run:
-    workflows: ["Build Executable", "Build Dashboard Executable"]
-    types:
-      - completed
+  push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch: # Allows manual triggering from GitHub UI
 
 jobs:
-  create-release:
-    # Only run if the triggering workflow succeeded and it's not a PR
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+  build-main-executable:
+    name: Build Main Executable
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller wsmd.spec
+
+      - name: Upload executable as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsmd-executable
+          path: dist/wsmd.exe
+          retention-days: 30 # Artifact will be available for 30 days
+
+  build-dashboard-executable:
+    name: Build Dashboard Executable
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build dashboard executable with PyInstaller
+        run: |
+          cd ${{ github.workspace }}
+          dir dashboard
+          pyinstaller --onefile --clean --windowed --name wsmd_dashboard dashboard/main.py
+
+      - name: Upload dashboard executable as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsmd-dashboard-executable
+          path: dist/wsmd_dashboard.exe
+          retention-days: 30 # Artifact will be available for 30 days
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-main-executable, build-dashboard-executable]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
     steps:
       - name: Check for recent releases
         id: check_releases
@@ -48,41 +111,36 @@ jobs:
             return 'create';
           result-encoding: string
 
-      - name: Download artifacts from previous workflows
+      - name: Download main executable artifact
         if: steps.check_releases.outputs.result == 'create'
-        uses: dawidd6/action-download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
-          repo: ${{ github.repository }}
-          workflow: Build Executable,Build Dashboard Executable
-          workflow_conclusion: success
-          path: artifacts
-          if_no_artifact_found: fail
+          name: wsmd-executable
+          path: artifacts/main
+
+      - name: Download dashboard executable artifact
+        if: steps.check_releases.outputs.result == 'create'
+        uses: actions/download-artifact@v4
+        with:
+          name: wsmd-dashboard-executable
+          path: artifacts/dashboard
 
       - name: List downloaded artifacts
         if: steps.check_releases.outputs.result == 'create'
         run: |
-          ls -la artifacts
+          echo "Downloaded artifacts:"
           find artifacts -type f | sort
 
       - name: Validate downloaded artifacts
         if: steps.check_releases.outputs.result == 'create'
         id: validate_artifacts
         run: |
-          # List all downloaded files for debugging
-          echo "Listing all downloaded files:"
-          find artifacts -type f | sort
-          
-          # Check if we have both executables (anywhere in the artifacts directory)
-          MAIN_EXE_COUNT=$(find artifacts -name "wsmd.exe" | wc -l)
-          DASHBOARD_EXE_COUNT=$(find artifacts -name "wsmd_dashboard.exe" | wc -l)
-          
-          echo "Found $MAIN_EXE_COUNT main executable(s) and $DASHBOARD_EXE_COUNT dashboard executable(s)"
-          
-          if [ $MAIN_EXE_COUNT -eq 0 ]; then
+          # Check if we have both executables
+          if [ ! -f "artifacts/main/wsmd.exe" ]; then
             echo "::error::Missing main executable (wsmd.exe)"
             echo "proceed=false" >> $GITHUB_OUTPUT
             exit 1
-          elif [ $DASHBOARD_EXE_COUNT -eq 0 ]; then
+          elif [ ! -f "artifacts/dashboard/wsmd_dashboard.exe" ]; then
             echo "::error::Missing dashboard executable (wsmd_dashboard.exe)"
             echo "proceed=false" >> $GITHUB_OUTPUT
             exit 1
@@ -99,16 +157,9 @@ jobs:
       - name: Copy artifacts to release directory
         if: steps.check_releases.outputs.result == 'create' && steps.validate_artifacts.outputs.proceed == 'true'
         run: |
-          # Find the executable files and copy them to the release directory
-          echo "Copying executables to release directory..."
-          
-          # Find all executables
-          MAIN_EXE_PATH=$(find artifacts -name "wsmd.exe" | head -n 1)
-          DASHBOARD_EXE_PATH=$(find artifacts -name "wsmd_dashboard.exe" | head -n 1)
-          
-          # Copy them with specific names (this ensures consistent naming)
-          cp "$MAIN_EXE_PATH" release-files/wsmd.exe
-          cp "$DASHBOARD_EXE_PATH" release-files/wsmd_dashboard.exe
+          # Copy executables to release directory
+          cp artifacts/main/wsmd.exe release-files/
+          cp artifacts/dashboard/wsmd_dashboard.exe release-files/
           
           echo "Release files:"
           ls -la release-files/
