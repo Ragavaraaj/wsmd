@@ -82,12 +82,12 @@ def get_client_mac(request):
     print(f"Client IP: {ip}")
     return resolve_mac_from_ip(ip)
 
-def generate_strong_password(length=20):
+def generate_strong_password(length=8):
     """Generate a strong random password"""
-    chars = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
-def setup_ap_mode(ssid="PiDeviceManager"):
+def setup_ap_mode(ssid="WSMD"):
     """Setup Access Point mode on the Raspberry Pi"""
     # Generate a strong password for the AP
     password = generate_strong_password()
@@ -146,9 +146,9 @@ rsn_pairwise=CCMP
             dnsmasq_conf = """
 # WSMD dnsmasq configuration
 interface=wlan0
-dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+dhcp-range=10.0.0.2,10.0.0.20,255.0.0.0,24h
 domain=wlan
-address=/wsmd.local/192.168.4.1
+address=/wsmd.local/10.0.0.1
 """
             with open('/etc/dnsmasq.conf', 'w') as f:
                 f.write(dnsmasq_conf)
@@ -176,28 +176,11 @@ address=/wsmd.local/192.168.4.1
 ACCESS POINT MODE ACTIVATED
 SSID: {ssid}
 Password: {password}
-IP Address: 192.168.4.1
+IP Address: 10.0.0.1
 =================================
             """)
         except Exception as e:
             print(f"Error configuring AP mode: {e}")
-            # Fall back to simulated mode if configuration fails
-            print(f"""
-=================================
-SIMULATED ACCESS POINT MODE
-SSID: {ssid}
-Password: {password}
-=================================
-            """)
-    else:
-        # Simulation mode for non-Raspberry Pi systems
-        print(f"""
-=================================
-SIMULATED ACCESS POINT MODE
-SSID: {ssid}
-Password: {password}
-=================================
-        """)
     
     return password
 
