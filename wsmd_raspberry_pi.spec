@@ -73,7 +73,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['_tkinter', 'Tkinter', 'tkinter'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,
@@ -99,7 +99,7 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch="armhf",
+    target_arch="armv6",
     codesign_identity=None,
     entitlements_file=None,
 )
